@@ -543,7 +543,7 @@ def main():
 
 # Run server in HTTP mode for Railway
         logger.info(f"Starting HTTP server on port {port}")
-        mcp.run(transport="http", host="0.0.0.0", port=port)
+        mcp.run(transport="sse", host="0.0.0.0", port=port)
             
     except KeyboardInterrupt:
         logger.info("Server shutdown requested")
