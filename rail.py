@@ -539,7 +539,7 @@ def main():
         logger.info("   - 'Show liquidation zones for Bitcoin'")
         logger.info("   - 'What symbols are available?'")
         
-        port = int(os.environ.get("PORT", 8781))
+        port = int(os.environ.get("PORT", 10000))
 
 # Run server in HTTP mode for Railway
         logger.info(f"Starting HTTP server on port {port}")
