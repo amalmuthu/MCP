@@ -144,7 +144,7 @@ def get_liquidation_interpretation(long_pct: float, short_pct: float, total: flo
     }
 
 # =============================================================================
-# FUNDING RATE ANALYSIS (KEEP AS IS)
+# FUNDING RATE ANALYSIS 
 # =============================================================================
 
 def analyze_funding_rate(
@@ -773,8 +773,8 @@ def analyze_liquidation(
                 "long_liquidations": round(total_long, 2),
                 "short_liquidations": round(total_short, 2),
                 "long_percentage": round(long_pct, 2),
-                "short_percentage
-"short_percentage": round(short_pct, 2),
+                
+                "short_percentage": round(short_pct, 2),
                 "average_liquidation": round(sum(all_liquidations) / len(all_liquidations), 2),
                 "max_liquidation": round(max(all_liquidations), 2),
                 "min_liquidation": round(min(all_liquidations), 2),
@@ -1170,7 +1170,7 @@ async def health():
 def main():
     """Main function to start the REST API server"""
     try:
-        logger.info("🚀 Starting Coinglass Trading Analytics REST API v2.0...")
+        logger.info(" Starting Coinglass Trading Analytics REST API v2.0...")
         
         # Test database connection
         with get_db_connection() as conn, conn.cursor() as cur:
