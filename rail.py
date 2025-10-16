@@ -471,20 +471,28 @@ def analyze_liquidation(
     # HELPER FUNCTIONS FOR TABLE NAMING
     # ============================================================================
     
-    def get_liq_table_name(sym: str, tf: str, individual: bool) -> str:
-        """Get correct liquidation table name based on schema"""
-        clean = sym.lower().replace('-', '').replace('_', '')
-        if not individual:
-            # Aggregated schema: btc_1d (remove 'usdt')
-            clean = clean.replace('usdt', '')
-        # Individual schema: btcusdt_1d (keep 'usdt')
-        return f"{clean}_{tf}"
+    # ============================================================================
+# HELPER FUNCTIONS FOR TABLE NAMING
+# ============================================================================
+
+def get_liq_table_name(sym: str, tf: str, individual: bool) -> str:
+    """Get correct liquidation table name based on schema"""
+    clean = sym.lower().replace('-', '').replace('_', '')
+    if not individual:
+        # Aggregated schema: btc_1d (remove 'usdt')
+        clean = clean.replace('usdt', '')
+    # Individual schema: btcusdt_1d (keep 'usdt')
+    return f"{clean}_{tf}"
+
+def get_price_table_name(sym: str, tf: str) -> str:
+    """Get price table name - always btcusdt_1d format"""
+    clean = sym.lower().replace('-', '').replace('_', '')
     
-    def get_price_table_name(sym: str, tf: str) -> str:
-        """Get price table name - always includes 'usdt'"""
-        clean = sym.lower().replace('-', '').replace('_', '')
-        return f"{clean}_{tf}"
+    # Ensure 'usdt' suffix exists
+    if not clean.endswith('usdt'):
+        clean = clean + 'usdt'
     
+    return f"{clean}_{tf}"
     # ============================================================================
     # SCHEMA AND COLUMN SELECTION
     # ============================================================================
