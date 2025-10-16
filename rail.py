@@ -444,7 +444,6 @@ def analyze_funding_rate(
 # =============================================================================
 # LIQUIDATION ANALYSIS (NEW COMPREHENSIVE TOOL)
 # =============================================================================
-
 def analyze_liquidation(
     query_type: str,
     symbol: Optional[str] = None,
@@ -468,19 +467,40 @@ def analyze_liquidation(
     - 'cascade': Detect liquidation cascade events
     """
     
-    # Choose schema
+    # ============================================================================
+    # HELPER FUNCTIONS FOR TABLE NAMING
+    # ============================================================================
+    
+    def get_liq_table_name(sym: str, tf: str, individual: bool) -> str:
+        """Get correct liquidation table name based on schema"""
+        clean = sym.lower().replace('-', '').replace('_', '')
+        if not individual:
+            # Aggregated schema: btc_1d (remove 'usdt')
+            clean = clean.replace('usdt', '')
+        # Individual schema: btcusdt_1d (keep 'usdt')
+        return f"{clean}_{tf}"
+    
+    def get_price_table_name(sym: str, tf: str) -> str:
+        """Get price table name - always includes 'usdt'"""
+        clean = sym.lower().replace('-', '').replace('_', '')
+        return f"{clean}_{tf}"
+    
+    # ============================================================================
+    # SCHEMA AND COLUMN SELECTION
+    # ============================================================================
+    
     schema = 'binance_futures_liquidation_history' if use_individual else 'binance_futures_liquidation_aggregated_history'
     long_col = 'long_liquidation_usd' if use_individual else 'aggregated_long_liquidation_usd'
     short_col = 'short_liquidation_usd' if use_individual else 'aggregated_short_liquidation_usd'
     
     with get_db_connection() as conn, conn.cursor(row_factory=dict_row) as cur:
         
-        # =====================================================================
+        # ====================================================================
         # QUERY TYPE 1: CURRENT LIQUIDATION ACTIVITY
-        # =====================================================================
+        # ====================================================================
         if query_type == "current" and symbol:
-            clean_symbol = symbol.lower().replace('-', '').replace('_', '')
-            table_name = f"{clean_symbol}_{timeframe}"
+            liq_table = get_liq_table_name(symbol, timeframe, use_individual)
+            price_table = get_price_table_name(symbol, timeframe)
             
             try:
                 cur.execute(f"""
@@ -489,8 +509,8 @@ def analyze_liquidation(
                         liq.{short_col} as short_liquidation,
                         liq.time,
                         COALESCE(pr.close, '0') as price
-                    FROM {schema}."{table_name}" liq
-                    LEFT JOIN binance_futures_price_history."{table_name}" pr
+                    FROM {schema}."{liq_table}" liq
+                    LEFT JOIN binance_futures_price_history."{price_table}" pr
                         ON liq.time = pr.time
                     ORDER BY liq.time DESC
                     LIMIT 10
@@ -545,12 +565,12 @@ def analyze_liquidation(
             except Exception as e:
                 return {"error": f"Error fetching liquidation data for {symbol}: {str(e)}"}
         
-        # =====================================================================
+        # ====================================================================
         # QUERY TYPE 2: LIQUIDATION ZONES (with price levels)
-        # =====================================================================
+        # ====================================================================
         elif query_type == "zones" and symbol:
-            clean_symbol = symbol.lower().replace('-', '').replace('_', '')
-            table_name = f"{clean_symbol}_{timeframe}"
+            liq_table = get_liq_table_name(symbol, timeframe, use_individual)
+            price_table = get_price_table_name(symbol, timeframe)
             
             try:
                 cur.execute(f"""
@@ -559,10 +579,10 @@ def analyze_liquidation(
                         liq.{short_col} as short_liquidation,
                         liq.time,
                         COALESCE(pr.close, '0') as price
-                    FROM {schema}."{table_name}" liq
-                    LEFT JOIN binance_futures_price_history."{table_name}" pr
+                    FROM {schema}."{liq_table}" liq
+                    LEFT JOIN binance_futures_price_history."{price_table}" pr
                         ON liq.time = pr.time
-                    WHERE liq.time >= NOW() - INTERVAL '{lookback_hours} hours'
+                    WHERE liq.time::timestamp >= NOW() - INTERVAL '{lookback_hours} hours'
                     ORDER BY liq.time DESC
                     LIMIT 100
                 """)
@@ -622,12 +642,11 @@ def analyze_liquidation(
             except Exception as e:
                 return {"error": f"Error fetching liquidation zones for {symbol}: {str(e)}"}
         
-        # =====================================================================
+        # ====================================================================
         # QUERY TYPE 3: HISTORICAL TREND
-        # =====================================================================
+        # ====================================================================
         elif query_type == "trend" and symbol:
-            clean_symbol = symbol.lower().replace('-', '').replace('_', '')
-            table_name = f"{clean_symbol}_{timeframe}"
+            liq_table = get_liq_table_name(symbol, timeframe, use_individual)
             
             try:
                 cur.execute(f"""
@@ -635,8 +654,8 @@ def analyze_liquidation(
                         {long_col} as long_liquidation,
                         {short_col} as short_liquidation,
                         time
-                    FROM {schema}."{table_name}"
-                    WHERE time >= NOW() - INTERVAL '{lookback_hours} hours'
+                    FROM {schema}."{liq_table}"
+                    WHERE time::timestamp >= NOW() - INTERVAL '{lookback_hours} hours'
                     ORDER BY time DESC
                     LIMIT 50
                 """)
@@ -685,15 +704,15 @@ def analyze_liquidation(
             except Exception as e:
                 return {"error": f"Error fetching trend for {symbol}: {str(e)}"}
         
-        # =====================================================================
+        # ====================================================================
         # QUERY TYPE 4: COMPARE MULTIPLE SYMBOLS
-        # =====================================================================
+        # ====================================================================
         elif query_type == "compare" and symbol:
             symbols = [s.strip() for s in symbol.split(',')]
             comparison = []
             
             for sym in symbols:
-                result = analyze_liquidation("current", symbol=sym, timeframe=timeframe)
+                result = analyze_liquidation("current", symbol=sym, timeframe=timeframe, use_individual=use_individual)
                 if "error" not in result:
                     comparison.append({
                         'symbol': result['symbol'],
@@ -717,9 +736,9 @@ def analyze_liquidation(
                 "analysis": f"Highest liquidations: {comparison[0]['symbol']} (${comparison[0]['total_liquidations']:,.2f})"
             }
         
-        # =====================================================================
+        # ====================================================================
         # QUERY TYPE 5: MARKET-WIDE STATISTICS
-        # =====================================================================
+        # ====================================================================
         elif query_type == "stats":
             cur.execute("""
                 SELECT table_name 
@@ -774,7 +793,6 @@ def analyze_liquidation(
                 "long_liquidations": round(total_long, 2),
                 "short_liquidations": round(total_short, 2),
                 "long_percentage": round(long_pct, 2),
-                
                 "short_percentage": round(short_pct, 2),
                 "average_liquidation": round(sum(all_liquidations) / len(all_liquidations), 2),
                 "max_liquidation": round(max(all_liquidations), 2),
@@ -784,9 +802,9 @@ def analyze_liquidation(
                 "risk_level": analysis["risk_level"]
             }
         
-        # =====================================================================
+        # ====================================================================
         # QUERY TYPE 6: WHALE LIQUIDATIONS (large events)
-        # =====================================================================
+        # ====================================================================
         elif query_type == "whale":
             # Use individual liquidation history for whale tracking
             cur.execute("""
@@ -803,6 +821,7 @@ def analyze_liquidation(
             
             for table in tables:
                 try:
+                    # For individual schema, symbol name includes 'usdt'
                     symbol_name = table.replace(f'_{timeframe}', '')
                     
                     cur.execute(f"""
@@ -811,7 +830,7 @@ def analyze_liquidation(
                             short_liquidation_usd as short_liq,
                             time
                         FROM binance_futures_liquidation_history."{table}"
-                        WHERE time >= NOW() - INTERVAL '{lookback_hours} hours'
+                        WHERE time::timestamp >= NOW() - INTERVAL '{lookback_hours} hours'
                         ORDER BY time DESC
                         LIMIT 50
                     """)
@@ -854,9 +873,9 @@ def analyze_liquidation(
                 "largest": whale_liquidations[0] if whale_liquidations else None
             }
         
-        # =====================================================================
+        # ====================================================================
         # QUERY TYPE 7: SCAN FOR HIGH LIQUIDATION ACTIVITY
-        # =====================================================================
+        # ====================================================================
         elif query_type == "scan":
             cur.execute("""
                 SELECT table_name 
@@ -872,7 +891,12 @@ def analyze_liquidation(
             
             for table in tables:
                 try:
-                    symbol_name = table.replace(f'_{timeframe}', '')
+                    # Extract symbol name based on schema
+                    if use_individual:
+                        symbol_name = table.replace(f'_{timeframe}', '')
+                    else:
+                        # For aggregated, add 'usdt' back for display
+                        symbol_name = table.replace(f'_{timeframe}', '') + 'usdt'
                     
                     cur.execute(f"""
                         SELECT 
@@ -926,12 +950,12 @@ def analyze_liquidation(
                 "summary": f"Found {len(results)} coins with liquidations. Top: {results[0]['symbol']} (${results[0]['total_liquidation']:,.2f})" if results else "No results"
             }
         
-        # =====================================================================
+        # ====================================================================
         # QUERY TYPE 8: LIQUIDATION CASCADE DETECTION
-        # =====================================================================
+        # ====================================================================
         elif query_type == "cascade" and symbol:
-            clean_symbol = symbol.lower().replace('-', '').replace('_', '')
-            table_name = f"{clean_symbol}_{timeframe}"
+            liq_table = get_liq_table_name(symbol, timeframe, use_individual)
+            price_table = get_price_table_name(symbol, timeframe)
             
             try:
                 cur.execute(f"""
@@ -941,10 +965,10 @@ def analyze_liquidation(
                         liq.time,
                         COALESCE(pr.close, '0') as price,
                         COALESCE(LAG(pr.close) OVER (ORDER BY liq.time), pr.close) as prev_price
-                    FROM {schema}."{table_name}" liq
-                    LEFT JOIN binance_futures_price_history."{table_name}" pr
+                    FROM {schema}."{liq_table}" liq
+                    LEFT JOIN binance_futures_price_history."{price_table}" pr
                         ON liq.time = pr.time
-                    WHERE liq.time >= NOW() - INTERVAL '{lookback_hours} hours'
+                    WHERE liq.time::timestamp >= NOW() - INTERVAL '{lookback_hours} hours'
                     ORDER BY liq.time DESC
                     LIMIT 100
                 """)
@@ -998,8 +1022,6 @@ def analyze_liquidation(
                 "error": "Invalid query type or missing parameters",
                 "valid_types": ["current", "zones", "trend", "compare", "stats", "whale", "scan", "cascade"]
             }
-
-
 # =============================================================================
 # REST API ENDPOINTS
 # =============================================================================
