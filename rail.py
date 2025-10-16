@@ -285,17 +285,18 @@ def analyze_funding_rate(
             
             try:
                 cur.execute(f"""
-                    SELECT 
-                        fr.close as funding_rate,
-                        fr.time,
-                        COALESCE(pr.close, '0') as price
-                    FROM binance_futures_funding_rate_history."{table_name}" fr
-                    LEFT JOIN binance_futures_price_history."{table_name}" pr
-                        ON fr.time = pr.time
-                    WHERE fr.time >= NOW() - INTERVAL '{lookback_hours} hours'
-                    ORDER BY fr.time DESC
-                    LIMIT 50
-                """)
+                SELECT 
+                    fr.close as funding_rate,
+                    fr.time,
+                    COALESCE(pr.close, '0') as price
+                FROM binance_futures_funding_rate_history."{table_name}" fr
+                LEFT JOIN binance_futures_price_history."{table_name}" pr
+                    ON fr.time = pr.time
+                WHERE fr.time::timestamp >= NOW() - INTERVAL '{lookback_hours} hours'
+                ORDER BY fr.time DESC
+                LIMIT 50
+            """)
+
                 
                 rows = cur.fetchall()
                 if not rows:
