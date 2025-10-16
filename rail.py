@@ -591,7 +591,6 @@ def analyze_liquidation(
                     FROM {schema}."{liq_table}" liq
                     LEFT JOIN binance_futures_price_history."{price_table}" pr
                         ON liq.time = pr.time
-                    WHERE liq.time::timestamp >= NOW() - INTERVAL '{lookback_hours} hours'
                     ORDER BY liq.time DESC
                     LIMIT 100
                 """)
@@ -664,7 +663,6 @@ def analyze_liquidation(
                         {short_col} as short_liquidation,
                         time
                     FROM {schema}."{liq_table}"
-                    WHERE time::timestamp >= NOW() - INTERVAL '{lookback_hours} hours'
                     ORDER BY time DESC
                     LIMIT 50
                 """)
@@ -839,7 +837,6 @@ def analyze_liquidation(
                             short_liquidation_usd as short_liq,
                             time
                         FROM binance_futures_liquidation_history."{table}"
-                        WHERE time::timestamp >= NOW() - INTERVAL '{lookback_hours} hours'
                         ORDER BY time DESC
                         LIMIT 50
                     """)
@@ -977,8 +974,7 @@ def analyze_liquidation(
                     FROM {schema}."{liq_table}" liq
                     LEFT JOIN binance_futures_price_history."{price_table}" pr
                         ON liq.time = pr.time
-                    WHERE liq.time::timestamp >= NOW() - INTERVAL '{lookback_hours} hours'
-                    ORDER BY liq.time DESC
+                     BY liq.time DESC
                     LIMIT 100
                 """)
                 
