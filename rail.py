@@ -467,10 +467,11 @@ def analyze_liquidation(
     - 'cascade': Detect liquidation cascade events
     """
     
-    # ============================================================================
-    # HELPER FUNCTIONS FOR TABLE NAMING
-    # ============================================================================
-    
+    # Validate symbol format
+    if symbol and not symbol.upper().endswith('USDT'):
+        return {
+            "error": f"Invalid symbol '{symbol}'. Only Binance USDT pairs are supported (e.g., BTCUSDT, ETHUSDT, SOLUSDT). Please use the search_symbol tool to find available symbols."
+        }
     # ============================================================================
 # HELPER FUNCTIONS FOR TABLE NAMING
 # ============================================================================
